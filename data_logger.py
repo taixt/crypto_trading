@@ -1,32 +1,43 @@
-import csv
 import os
-from datetime import datetime, timezone
+import csv
+import pandas as pd
 
 class DataLogger:
-    def __init__(self, folder="data"):
-        self.folder = folder
-        os.makedirs(folder, exist_ok=True)
-        self.files = {}
+    """
+    Logs market data (trades, order books, tickers) to CSV files.
+    CSV filename pattern: <category>_<exchange>_<symbol>.csv
+    """
+    def __init__(self, data_dir="data"):
+        self.data_dir = data_dir
+        os.makedirs(data_dir, exist_ok=True)
 
-    def _get_file(self, data_type):
-        if data_type not in self.files:
-            path = os.path.join(self.folder, f"{data_type}.csv")
-            exists = os.path.isfile(path)
-            f = open(path, mode="a", newline="")
+    def _get_file_path(self, category, exchange, symbol):
+        return os.path.join(self.data_dir, f"{category}_{exchange}_{symbol}.csv")
+
+    def log(self, category, exchange, symbol, data, headers=None):
+        """
+        Logs a single row of data to CSV.
+        :param category: trades/orderbook/tickers
+        :param exchange: binance/bitfinex
+        :param symbol: trading pair like btcusdt or tBTCUSD
+        :param data: list of values
+        :param headers: list of column names if file is new
+        """
+        file_path = self._get_file_path(category, exchange, symbol)
+        file_exists = os.path.isfile(file_path)
+
+        if not file_exists and headers:
+            with open(file_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+
+        with open(file_path, "a", newline="") as f:
             writer = csv.writer(f)
-            if not exists:
-                # Write headers based on data type
-                if data_type == "trades":
-                    writer.writerow(["timestamp_utc","exchange","symbol","price","amount"])
-                elif data_type == "orderbook":
-                    writer.writerow(["timestamp_utc","exchange","symbol","bid","bid_size","ask","ask_size"])
-                elif data_type == "ohlcv":
-                    writer.writerow(["timestamp_utc","exchange","symbol","open","high","low","close","volume"])
-                elif data_type == "tickers":
-                    writer.writerow(["timestamp_utc","exchange","symbol","price","high_24h","low_24h","volume_24h"])
-            self.files[data_type] = (f, writer)
-        return self.files[data_type]
+            writer.writerow(data)
 
-    def log(self, data_type, row):
-        _, writer = self._get_file(data_type)
-        writer.writerow(row)
+    def read_csv(self, category, exchange, symbol):
+        file_path = self._get_file_path(category, exchange, symbol)
+        if os.path.exists(file_path):
+            return pd.read_csv(file_path, parse_dates=["timestamp"])
+        else:
+            return pd.DataFrame()

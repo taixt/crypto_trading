@@ -1,33 +1,59 @@
-import json
-import websocket
 import threading
-from collections import deque
-from datetime import datetime, timezone
+import websocket
+import json
+import pandas as pd
 
 class BinanceOrderBookStreamer:
-    def __init__(self, symbol="btcusdt", top_n=5, logger=None):
+    def __init__(self, symbol, exchange, top_n=5, logger=None):
         self.symbol = symbol.lower()
+        self.exchange = exchange
         self.top_n = top_n
-        self.ws_url = f"wss://stream.binance.com:9443/ws/{self.symbol}@depth20@100ms"
         self.logger = logger
-        self.bids = deque(maxlen=top_n)
-        self.asks = deque(maxlen=top_n)
+        self.ws = None
+        self.base_url = f"wss://stream.binance.com:9443/ws/{self.symbol}@depth"
 
-    def on_message(self, ws, message):
+    def _on_message(self, ws, message):
         data = json.loads(message)
-        self.bids = sorted([[float(p), float(q)] for p, q in data["b"]], key=lambda x: -x[0])[:self.top_n]
-        self.asks = sorted([[float(p), float(q)] for p, q in data["a"]], key=lambda x: x[0])[:self.top_n]
+        timestamp = pd.to_datetime(data['E'], unit='ms')
+        bids = data.get("b", [])[:self.top_n]
+        asks = data.get("a", [])[:self.top_n]
 
-        timestamp = datetime.now(timezone.utc)
+        row = [timestamp]
+        for i in range(self.top_n):
+            row.append(float(bids[i][0]) if i < len(bids) else 0.0)
+            row.append(float(bids[i][1]) if i < len(bids) else 0.0)
+            row.append(float(asks[i][0]) if i < len(asks) else 0.0)
+            row.append(float(asks[i][1]) if i < len(asks) else 0.0)
+
+        headers = ["timestamp"]
+        for i in range(1, self.top_n + 1):
+            headers += [f"bid{i}", f"bid{i}_qty", f"ask{i}", f"ask{i}_qty"]
+
         if self.logger:
-            for i in range(self.top_n):
-                bid, bid_size = self.bids[i] if i < len(self.bids) else (0, 0)
-                ask, ask_size = self.asks[i] if i < len(self.asks) else (0, 0)
-                self.logger.log("orderbook", [timestamp.isoformat(), "Binance", self.symbol.upper(), bid, bid_size, ask, ask_size])
+            self.logger.log(
+                category="orderbook",
+                exchange=self.exchange,
+                symbol=self.symbol,
+                data=row,
+                headers=headers
+            )
 
-    def on_open(self, ws):
-        print(f"Connected to Binance Order Book for {self.symbol.upper()}")
+    def _on_error(self, ws, error):
+        print(f"Binance OrderBook WebSocket Error: {error}")
+
+    def _on_close(self, ws, close_status_code, close_msg):
+        print("Binance OrderBook WebSocket closed")
+
+    def _run(self):
+        self.ws = websocket.WebSocketApp(
+            self.base_url,
+            on_message=self._on_message,
+            on_error=self._on_error,
+            on_close=self._on_close
+        )
+        self.ws.run_forever()
 
     def start(self):
-        ws = websocket.WebSocketApp(self.ws_url, on_message=self.on_message, on_open=self.on_open)
-        threading.Thread(target=ws.run_forever, daemon=True).start()
+        threading.Thread(target=self._run, daemon=True).start()
+
+

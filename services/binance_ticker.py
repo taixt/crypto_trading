@@ -1,47 +1,48 @@
-import json
-import websocket
 import threading
-from datetime import datetime, timezone
+import websocket
+import json
+import pandas as pd
 
 class BinanceTickerStreamer:
-    """
-    Streams live Binance ticker data for a symbol and logs it.
-    """
-    def __init__(self, symbol="btcusdt", logger=None):
+    def __init__(self, symbol, exchange, logger=None):
         self.symbol = symbol.lower()
-        self.ws_url = f"wss://stream.binance.com:9443/ws/{self.symbol}@ticker"
+        self.exchange = exchange
         self.logger = logger
-        self.price = 0
-        self.high_24h = 0
-        self.low_24h = 0
-        self.volume_24h = 0
+        self.ws = None
+        self.base_url = f"wss://stream.binance.com:9443/ws/{self.symbol}@ticker"
 
-    def on_message(self, ws, message):
+    def _on_message(self, ws, message):
         data = json.loads(message)
-        timestamp = datetime.now(timezone.utc)
+        timestamp = pd.to_datetime(data['E'], unit='ms')
+        price = float(data['c'])
+        high = float(data['h'])
+        low = float(data['l'])
+        volume = float(data['v'])
 
-        self.price = float(data.get("c", 0))
-        self.high_24h = float(data.get("h", 0))
-        self.low_24h = float(data.get("l", 0))
-        self.volume_24h = float(data.get("v", 0))
-
-        # Log ticker data
         if self.logger:
             self.logger.log(
-                "tickers",
-                [timestamp.isoformat(), "Binance", self.symbol.upper(),
-                 self.price, self.high_24h, self.low_24h, self.volume_24h]
+                category="tickers",
+                exchange=self.exchange,
+                symbol=self.symbol,
+                data=[timestamp, price, high, low, volume],
+                headers=["timestamp", "price", "high", "low", "volume"]
             )
 
-    def on_open(self, ws):
-        print(f"Connected to Binance ticker for {self.symbol.upper()}")
+    def _on_error(self, ws, error):
+        print(f"Binance Ticker WebSocket Error: {error}")
+
+    def _on_close(self, ws, close_status_code, close_msg):
+        print("Binance Ticker WebSocket closed")
+
+    def _run(self):
+        self.ws = websocket.WebSocketApp(
+            self.base_url,
+            on_message=self._on_message,
+            on_error=self._on_error,
+            on_close=self._on_close
+        )
+        self.ws.run_forever()
 
     def start(self):
-        ws = websocket.WebSocketApp(
-            self.ws_url,
-            on_message=self.on_message,
-            on_open=self.on_open,
-            on_error=lambda ws, err: print(f"Binance ticker error: {err}"),
-            on_close=lambda ws, code, msg: print("Binance ticker closed")
-        )
-        threading.Thread(target=ws.run_forever, daemon=True).start()
+        threading.Thread(target=self._run, daemon=True).start()
+

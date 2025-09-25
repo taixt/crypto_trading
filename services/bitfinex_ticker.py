@@ -1,68 +1,61 @@
-import json
-import websocket
 import threading
-from datetime import datetime, timezone
+import websocket
+import json
+import pandas as pd
 
 class BitfinexTickerStreamer:
-    """
-    Streams live Bitfinex ticker data for a symbol and logs it.
-    """
-    def __init__(self, symbol="tBTCUSD", logger=None):
+    def __init__(self, symbol, exchange, logger=None):
         self.symbol = symbol
-        self.ws_url = "wss://api-pub.bitfinex.com/ws/2"
+        self.exchange = exchange
         self.logger = logger
+        self.ws = None
         self.channel_id = None
-        self.last_price = 0
-        self.high_24h = 0
-        self.low_24h = 0
-        self.volume_24h = 0
 
-    def on_message(self, ws, message):
-        msg = json.loads(message)
+    def _on_open(self, ws):
+        ws.send(json.dumps({"event":"subscribe","channel":"ticker","symbol":self.symbol}))
+
+    def _on_message(self, ws, message):
+        data = json.loads(message)
 
         # Handle subscription confirmation
-        if isinstance(msg, dict):
-            if msg.get("event") == "subscribed" and msg.get("channel") == "ticker":
-                self.channel_id = msg["chanId"]
-                print(f"Subscribed to Bitfinex ticker for {self.symbol}, channel ID: {self.channel_id}")
+        if isinstance(data, dict):
+            if data.get("event") == "subscribed" and data.get("channel") == "ticker":
+                self.channel_id = data["chanId"]
             return
 
-        # Ignore unrelated channels
-        if msg[0] != self.channel_id:
-            return
-
-        # msg[1] contains ticker data
-        data = msg[1]
-        if len(data) >= 10:
-            bid, bid_size, ask, ask_size, daily_change, daily_change_perc, last_price, volume, high, low = data
-            timestamp = datetime.now(timezone.utc)
-            self.last_price = last_price
-            self.high_24h = high
-            self.low_24h = low
-            self.volume_24h = volume
-
+        if isinstance(data, list) and len(data) > 1:
+            if data[0] != self.channel_id or data[1] == 'hb':
+                return
+            last_price = data[1][6]
+            high = data[1][8]
+            low = data[1][9]
+            volume = data[1][7]
+            timestamp = pd.Timestamp.now()
             if self.logger:
                 self.logger.log(
-                    "tickers",
-                    [timestamp.isoformat(), "Bitfinex", self.symbol,
-                     self.last_price, self.high_24h, self.low_24h, self.volume_24h]
+                    category="tickers",
+                    exchange=self.exchange,
+                    symbol=self.symbol,
+                    data=[timestamp, last_price, high, low, volume],
+                    headers=["timestamp","price","high","low","volume"]
                 )
 
-    def on_open(self, ws):
-        print(f"Connected to Bitfinex ticker for {self.symbol}")
-        sub_msg = {
-            "event": "subscribe",
-            "channel": "ticker",
-            "symbol": self.symbol
-        }
-        ws.send(json.dumps(sub_msg))
+    def _on_error(self, ws, error):
+        print(f"Bitfinex Ticker WebSocket Error: {error}")
+
+    def _on_close(self, ws, close_status_code, close_msg):
+        print("Bitfinex Ticker WebSocket closed")
+
+    def _run(self):
+        self.ws = websocket.WebSocketApp(
+            "wss://api-pub.bitfinex.com/ws/2",
+            on_open=self._on_open,
+            on_message=self._on_message,
+            on_error=self._on_error,
+            on_close=self._on_close
+        )
+        self.ws.run_forever()
 
     def start(self):
-        ws = websocket.WebSocketApp(
-            self.ws_url,
-            on_message=self.on_message,
-            on_open=self.on_open,
-            on_error=lambda ws, err: print(f"Bitfinex ticker error: {err}"),
-            on_close=lambda ws, code, msg: print("Bitfinex ticker closed")
-        )
-        threading.Thread(target=ws.run_forever, daemon=True).start()
+        threading.Thread(target=self._run, daemon=True).start()
+
