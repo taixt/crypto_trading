@@ -16,9 +16,9 @@ logger = DataLogger("data")
 # Initialize Streamers
 # -------------------------------
 # Binance
-# binance_trades = BinanceStreamer("btcusdt", "binance", logger)
-# binance_ob = BinanceOrderBookStreamer("btcusdt", "binance", top_n=5, logger=logger)
-# binance_ticker = BinanceTickerStreamer("btcusdt", "binance", logger=logger)
+binance_trades = BinanceStreamer("btcusdt", "binance", logger)
+binance_ob = BinanceOrderBookStreamer("btcusdt", "binance", top_n=5, logger=logger)
+binance_ticker = BinanceTickerStreamer("btcusdt", "binance", logger=logger)
 
 # Bitfinex
 bitfinex_trades = BitfinexStreamer("tBTCUSD", "bitfinex", logger)
@@ -28,9 +28,9 @@ bitfinex_ticker = BitfinexTickerStreamer("tBTCUSD", "bitfinex", logger=logger)
 # -------------------------------
 # Start WebSockets
 # -------------------------------
-# binance_trades.start_websocket()
-# binance_ob.start()
-# binance_ticker.start()
+binance_trades.start_websocket()
+binance_ob.start()
+binance_ticker.start()
 
 bitfinex_trades.start_websocket()
 bitfinex_ob.start()
