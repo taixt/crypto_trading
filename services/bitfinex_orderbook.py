@@ -53,15 +53,15 @@ class BitfinexOrderBookStreamer:
         if count > 0:
             # Add or update price level
             if amount > 0:
-                self.asks[price] = amount
+                self.bids[price] = amount
             elif amount < 0:
-                self.bids[price] = abs(amount)
+                self.asks[price] = abs(amount)
         else:
             # Remove price level
             if amount == 1:
-                self.asks.pop(price, None)
-            elif amount == -1:
                 self.bids.pop(price, None)
+            elif amount == -1:
+                self.asks.pop(price, None)
 
         # Keep bids sorted descending, asks sorted ascending
         self.bids = OrderedDict(sorted(self.bids.items(), key=lambda x: x[0], reverse=True))
