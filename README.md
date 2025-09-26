@@ -2,10 +2,10 @@
 
 ### A coding project
 
-Where is alpha?  
+## Where is alpha?  
 - willing to do work that others can't because of constraint  
 
-What are constraints?  
+## What are constraints?  
 - Operational Constraints  
     - Regional Constraints (how to set up bank to receive foreign funds)  
     - Being a local helps to find ways  
@@ -27,3 +27,27 @@ What are constraints?
     - prepare tooling for strategies (tech edge)
     - wait for timing (time edge)
 
+## Details:
+
+- Local cross-exchange arbitrage:
+    - Buy here, send there, sell there, get money, convert, then send here.
+    - Is it legal?
+
+- Event based alpha
+    - make a scrape bot for news and price movement
+    - do sentimental analysis
+    - think about expectation and odds (be ready for low odds -> high return)
+    - focus on getting data fast, execution matters less
+    - Data sources:
+      - Custom Scrapers (building a scraper for CNN and such): fast but need to write yourself/chatGPT
+      - Direct Use (I.e. Twitter with Tweets)
+      - Prediction Markets
+      - Faster Markets
+      - Price Data / Volume Stuff
+    - Spreads kill. Getting in late = wide spreads
+
+- small capacity shitcoin arbitrage
+  - quantifying capacity & risk
+  - arbitrage how?
+  
+- 
